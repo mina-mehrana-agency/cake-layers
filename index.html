@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="description" content="An interactive cake slider that opens each cake into its numbered layers." />
+<title>Cake Layers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* One screen: a cake on a tinted stage, opening into numbered layers. */
+  :root {
+    color-scheme: dark;
+    --ink: #f7f1ea;
+    --ink-soft: rgb(247 241 234 / 0.86);
+    --button: rgb(255 255 255 / 0.16);
+    --button-hover: rgb(255 255 255 / 0.28);
+    --night: #0d0806;
+    --font: 'Urbanist', 'Segoe UI', system-ui, sans-serif;
+  }
+
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    background: var(--night);
+    color: var(--ink);
+    font-family: var(--font);
+    overflow: hidden;
+  }
+
+  .stage {
+    position: relative;
+    height: 100%;
+    overflow: hidden;
+    --open: 0;
+    --fade: 0;
+  }
+
+  .backdrop {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
+  }
+
+  .backdrop.is-active {
+    opacity: 1;
+  }
+
+  .cake {
+    position: absolute;
+    inset: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .cake.is-shown {
+    visibility: visible;
+  }
+
+  .cake img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-width: none;
+    user-select: none;
+    will-change: transform;
+  }
+
+  .layer {
+    filter: drop-shadow(0 14px 16px rgb(0 0 0 / 0.34));
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .callouts {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    pointer-events: none;
+    opacity: var(--fade);
+  }
+
+  .callout {
+    position: absolute;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transform: translateY(calc(var(--y) * 1px + (1 - var(--open)) * 58vh - 50%));
+    text-shadow: 0 1px 10px rgb(0 0 0 / 0.5);
+  }
+
+  .callout--right {
+    left: calc(var(--x) * 1px);
+  }
+
+  .callout--left {
+    right: calc(var(--x) * 1px);
+    flex-direction: row-reverse;
+    text-align: right;
+  }
+
+  .callout__arrow {
+    flex: none;
+    width: 46px;
+    height: 10px;
+  }
+
+  .callout--left .callout__arrow {
+    transform: scaleX(-1);
+  }
+
+  .callout__number {
+    flex: none;
+    font-size: clamp(22px, 2.5vw, 34px);
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .callout__text {
+    margin: 0;
+    width: 15ch;
+    font-size: clamp(12px, 1vw, 15px);
+    font-weight: 400;
+    line-height: 1.25;
+    color: var(--ink-soft);
+  }
+
+  .nav {
+    position: absolute;
+    top: 50%;
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    margin-top: -24px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--button);
+    color: var(--ink);
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition: background 0.2s ease, transform 0.2s ease;
+  }
+
+  .nav:hover {
+    background: var(--button-hover);
+    transform: scale(1.06);
+  }
+
+  .nav:focus-visible,
+  .cake-toggle:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 3px;
+  }
+
+  .nav--prev {
+    left: max(16px, 12vw);
+  }
+
+  .nav--next {
+    right: max(16px, 12vw);
+  }
+
+  .cake-toggle {
+    position: absolute;
+    border: 0;
+    border-radius: 24px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  @media (max-width: 720px) {
+    .callout {
+      gap: 6px;
+    }
+
+    .callout__arrow {
+      width: 14px;
+    }
+
+    .callout__text {
+      width: 9ch;
+      font-size: 11px;
+    }
+
+    .nav {
+      top: auto;
+      bottom: 20px;
+      margin-top: 0;
+    }
+
+    .nav--prev {
+      left: calc(50% - 60px);
+    }
+
+    .nav--next {
+      right: calc(50% - 60px);
+    }
+  }
+</style>
+</head>
+<body>
+<main class="stage" id="stage">
+  <div class="backdrop" style="background: radial-gradient(60% 70% at 50% 46%, #2c1710, #150b07 62%, #0c0604)"></div>
+  <div class="backdrop" style="background: radial-gradient(52% 66% at 50% 48%, #7e0a12, #300408 62%, #120103)"></div>
+  <div class="backdrop" style="background: radial-gradient(70% 82% at 50% 46%, #f0a124, #bd6a0c 58%, #57290a)"></div>
+  <div class="backdrop" style="background: radial-gradient(58% 68% at 50% 46%, #142a78, #0a1544 62%, #040818)"></div>
+
+  <div id="cakes"></div>
+  <h1 class="sr-only" id="cake-name" aria-live="polite">Dark chocolate cake</h1>
+  <ol class="callouts" id="callouts"></ol>
+
+  <button class="cake-toggle" id="cake-toggle" type="button" aria-label="Open or close the cake layers" aria-expanded="false"></button>
+  <button class="nav nav--prev" id="prev" type="button" aria-label="Previous cake">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14.5 6-6 6 6 6" /></svg>
+  </button>
+  <button class="nav nav--next" id="next" type="button" aria-label="Next cake">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9.5 6 6 6-6 6" /></svg>
+  </button>
+</main>
+
+<script>
+  const OPEN_MS = 1000;
+  const SLIDE_MS = 1100;
+  const AUTO_OPEN_DELAY = 500;
+  const SOURCE_WIDTH = 720;
+  // Share of a layer's width taken by its visible top ellipse; the layer above hides it when stacked.
+  const ELLIPSE = 0.15;
+
+  const CAKES = [
+    {
+      id: 'chocolate',
+      name: 'Dark chocolate cake',
+      labels: [
+        'Chocolate rosettes, curls and cookies',
+        'Rich chocolate mousse',
+        'Crunchy cocoa crumb',
+        'Smooth vanilla cream',
+        'Cookies and cream filling',
+        'Chocolate sponge base',
+      ],
+    },
+    {
+      id: 'redvelvet',
+      name: 'Red velvet berry cake',
+      labels: [
+        'Fresh raspberries and strawberry',
+        'Light berry mousse',
+        'Crunchy strawberry crumb',
+        'Smooth cream cheese',
+        'Glossy berry sauce',
+        'Red velvet sponge',
+      ],
+    },
+    {
+      id: 'vanilla',
+      name: 'Vanilla peach cake',
+      labels: [
+        'Torched vanilla meringue',
+        'Light peach mousse',
+        'Crunchy almond praline',
+        'Smooth vanilla cream',
+        'Glossy caramel layer',
+        'Vanilla sponge base',
+      ],
+    },
+    {
+      id: 'blueberry',
+      name: 'Blueberry cream cake',
+      labels: [
+        'Fresh blueberries',
+        'Light blueberry mousse',
+        'Crunchy violet crumb',
+        'Smooth vanilla cream',
+        'Glossy berry compote',
+        'Blueberry sponge base',
+      ],
+    },
+  ];
+
+  // Where each ingredient rests, as shares of the stage, and the side it arrives from.
+  const DECOR_SPOTS = [
+    { x: 0.055, y: 0.13, size: 0.075, turn: -14, fromX: -0.25, fromY: -0.25 },
+    { x: 0.94, y: 0.13, size: 0.075, turn: 16, fromX: 1.25, fromY: -0.25 },
+    { x: 0.13, y: 0.8, size: 0.115, turn: 8, fromX: -0.25, fromY: 1.25 },
+    { x: 0.93, y: 0.85, size: 0.085, turn: -10, fromX: 1.25, fromY: 1.25 },
+  ];
+
+  const stage = document.getElementById('stage');
+  const cakeHolder = document.getElementById('cakes');
+  const calloutList = document.getElementById('callouts');
+  const cakeName = document.getElementById('cake-name');
+  const toggle = document.getElementById('cake-toggle');
+  const backdrops = [...document.querySelectorAll('.backdrop')];
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const view = { width: 1, height: 1, phone: false, cakeWidth: 240, centerY: 400, spacing: 110 };
+  const cakes = [];
+
+  let activeIndex = 0;
+  let labelOwner = null;
+  let busy = false;
+  let autoOpenTimer = 0;
+
+  function createCake(data, sizes) {
+    const element = document.createElement('div');
+    element.className = 'cake';
+    element.setAttribute('aria-hidden', 'true');
+
+    const cake = { data, element, open: 0, alpha: 1, x: 0, layers: [], decor: [] };
+
+    DECOR_SPOTS.forEach((spot, index) => {
+      const image = new Image();
+      image.src = `img/decor-${data.id}-${index + 1}.webp`;
+      image.alt = '';
+      image.draggable = false;
+      element.append(image);
+      cake.decor.push({ image, spot, size: sizes.decor[data.id][index] });
+    });
+
+    // Bottom layer first, so each layer sits on top of the one below it.
+    sizes.cakes[data.id]
+      .map((size, index) => ({ size, index }))
+      .reverse()
+      .forEach(({ size, index }) => {
+        const image = new Image();
+        image.src = `img/${data.id}-${index + 1}.webp`;
+        image.alt = '';
+        image.draggable = false;
+        image.className = 'layer';
+        element.append(image);
+        cake.layers[index] = { image, size, closedY: 0, openY: 0, height: 0 };
+      });
+
+    cakeHolder.append(element);
+    return cake;
+  }
+
+  function layoutCake(cake) {
+    const { cakeWidth, centerY, spacing } = view;
+    const overlap = cakeWidth * ELLIPSE;
+
+    cake.layers.forEach((layer) => {
+      layer.height = (layer.size.height / SOURCE_WIDTH) * cakeWidth;
+      layer.image.style.width = `${cakeWidth}px`;
+      layer.image.style.height = `${layer.height}px`;
+    });
+
+    const stackHeight =
+      cake.layers.reduce((total, layer) => total + layer.height, 0) - overlap * (cake.layers.length - 1);
+    let top = centerY - stackHeight / 2;
+    cake.layers.forEach((layer, index) => {
+      layer.closedY = top + layer.height / 2;
+      top += layer.height - overlap;
+      layer.openY = centerY + (index - 2.5) * spacing;
+    });
+
+    const sizeBase = Math.min(view.width, view.height * 1.6);
+    cake.decor.forEach((piece) => {
+      const { spot } = piece;
+      const hidden = view.phone && spot.y > 0.5;
+      piece.image.style.display = hidden ? 'none' : '';
+      piece.width = sizeBase * spot.size * (view.phone ? 1.7 : 1);
+      piece.height = (piece.size.height / piece.size.width) * piece.width;
+      piece.image.style.width = `${piece.width}px`;
+      piece.image.style.height = `${piece.height}px`;
+      piece.homeX = view.width * spot.x;
+      piece.homeY = view.height * (view.phone ? spot.y * 0.62 : spot.y);
+      piece.awayX = view.width * spot.fromX;
+      piece.awayY = view.height * spot.fromY;
+    });
+  }
+
+  function fit() {
+    const bounds = stage.getBoundingClientRect();
+    view.width = bounds.width;
+    view.height = bounds.height;
+    view.phone = bounds.width < 720;
+    view.cakeWidth = view.phone
+      ? Math.min(bounds.width * 0.36, bounds.height * 0.24)
+      : Math.min(bounds.height * 0.3, bounds.width * 0.26);
+    view.centerY = bounds.height * (view.phone ? 0.46 : 0.48);
+    view.spacing = Math.max(bounds.height * (view.phone ? 0.112 : 0.14), view.cakeWidth * 0.34);
+
+    cakes.forEach(layoutCake);
+    placeCallouts(cakes[activeIndex]);
+    draw();
+  }
+
+  function placeCallouts(cake) {
+    const half = view.cakeWidth / 2;
+    const gap = view.phone ? 8 : Math.max(18, view.width * 0.02);
+    const offset = (view.width / 2 + half + gap).toFixed(1);
+    [...calloutList.children].forEach((item, index) => {
+      item.style.setProperty('--y', cake.layers[index].openY.toFixed(1));
+      item.style.setProperty('--x', offset);
+    });
+
+    const reach = Math.max(view.cakeWidth * 0.62, 120);
+    toggle.style.left = `${view.width / 2 - half}px`;
+    toggle.style.width = `${view.cakeWidth}px`;
+    toggle.style.top = `${view.centerY - reach}px`;
+    toggle.style.height = `${reach * 2}px`;
+  }
+
+  function fillCallouts(cake) {
+    calloutList.innerHTML = '';
+    cake.data.labels.forEach((text, index) => {
+      const onRight = index % 2 === 0;
+      const item = document.createElement('li');
+      item.className = `callout callout--${onRight ? 'right' : 'left'}`;
+      item.innerHTML = `
+        <svg class="callout__arrow" viewBox="0 0 46 10" fill="none" stroke="currentColor" stroke-width="1.4" preserveAspectRatio="xMinYMid slice" aria-hidden="true">
+          <path d="M46 5H1M6 1 1 5l5 4" />
+        </svg>
+        <span class="callout__number">${index + 1}</span>
+        <p class="callout__text">${text}</p>`;
+      calloutList.append(item);
+    });
+    placeCallouts(cake);
+  }
+
+  function poseCake(cake) {
+    const { open } = cake;
+    const left = view.width / 2 - view.cakeWidth / 2;
+    cake.element.style.opacity = cake.alpha.toFixed(3);
+    cake.element.style.transform = `translateX(${cake.x.toFixed(1)}px)`;
+
+    cake.layers.forEach((layer) => {
+      const center = layer.closedY + (layer.openY - layer.closedY) * open;
+      layer.image.style.transform = `translate(${left.toFixed(1)}px, ${(center - layer.height / 2).toFixed(1)}px)`;
+    });
+
+    cake.decor.forEach((piece) => {
+      const x = piece.awayX + (piece.homeX - piece.awayX) * open - piece.width / 2;
+      const y = piece.awayY + (piece.homeY - piece.awayY) * open - piece.height / 2;
+      piece.image.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${(piece.spot.turn * (2 - open)).toFixed(1)}deg)`;
+    });
+  }
+
+  function draw() {
+    cakes.forEach((cake) => {
+      if (cake.element.classList.contains('is-shown')) poseCake(cake);
+    });
+    if (!labelOwner) return;
+    stage.style.setProperty('--open', labelOwner.open.toFixed(4));
+    stage.style.setProperty('--fade', Math.min(1, Math.max(0, labelOwner.open * 1.7 - 0.35)).toFixed(3));
+  }
+
+  const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+
+  function tween(duration, update) {
+    if (reducedMotion) {
+      update(1);
+      draw();
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const start = performance.now();
+      const step = (now) => {
+        const progress = Math.min(1, (now - start) / duration);
+        update(ease(progress));
+        draw();
+        if (progress < 1) requestAnimationFrame(step);
+        else resolve();
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  function setTint(index) {
+    backdrops.forEach((layer, i) => layer.classList.toggle('is-active', i === index));
+  }
+
+  async function setOpen(cake, target) {
+    const from = cake.open;
+    toggle.setAttribute('aria-expanded', String(target === 1));
+    await tween(OPEN_MS, (t) => {
+      cake.open = from + (target - from) * t;
+    });
+  }
+
+  async function go(direction) {
+    if (busy) return;
+    busy = true;
+    clearTimeout(autoOpenTimer);
+
+    const outgoing = cakes[activeIndex];
+    activeIndex = (activeIndex + direction + cakes.length) % cakes.length;
+    const incoming = cakes[activeIndex];
+    const travel = view.width * 0.42;
+
+    incoming.open = 0;
+    incoming.x = direction * travel;
+    incoming.alpha = 0;
+    incoming.element.classList.add('is-shown');
+    setTint(activeIndex);
+    cakeName.textContent = incoming.data.name;
+
+    const startOpen = outgoing.open;
+    await tween(SLIDE_MS, (t) => {
+      outgoing.open = startOpen * (1 - t);
+      outgoing.x = -direction * travel * t;
+      outgoing.alpha = 1 - t;
+      incoming.x = direction * travel * (1 - t);
+      incoming.alpha = t;
+    });
+    outgoing.element.classList.remove('is-shown');
+    outgoing.x = 0;
+    outgoing.alpha = 1;
+    labelOwner = incoming;
+    fillCallouts(incoming);
+    await setOpen(incoming, 1);
+    busy = false;
+  }
+
+  async function start() {
+    const response = await fetch('img/manifest.json');
+    const sizes = await response.json();
+    CAKES.forEach((data) => cakes.push(createCake(data, sizes)));
+
+    const first = cakes[0];
+    first.element.classList.add('is-shown');
+    labelOwner = first;
+    setTint(0);
+    fillCallouts(first);
+    fit();
+
+    document.getElementById('next').addEventListener('click', () => go(1));
+    document.getElementById('prev').addEventListener('click', () => go(-1));
+    toggle.addEventListener('click', async () => {
+      if (busy) return;
+      busy = true;
+      clearTimeout(autoOpenTimer);
+      const cake = cakes[activeIndex];
+      await setOpen(cake, cake.open > 0.5 ? 0 : 1);
+      busy = false;
+    });
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowRight') go(1);
+      if (event.key === 'ArrowLeft') go(-1);
+    });
+    window.addEventListener('resize', fit);
+
+    // Give the first cake a moment to arrive, but never let a slow image block the page.
+    const images = [...first.element.querySelectorAll('img')];
+    await Promise.race([
+      Promise.all(images.map((image) => image.decode().catch(() => {}))),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+
+    autoOpenTimer = setTimeout(async () => {
+      if (busy) return;
+      busy = true;
+      await setOpen(first, 1);
+      busy = false;
+    }, AUTO_OPEN_DELAY);
+  }
+
+  start();
+</script>
+</body>
+</html>
