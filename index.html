@@ -72,8 +72,13 @@
     will-change: transform;
   }
 
-  .layer {
-    filter: drop-shadow(0 14px 16px rgb(0 0 0 / 0.34));
+  .layer-shadow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgb(0 0 0 / 0.42), rgb(0 0 0 / 0));
+    will-change: transform;
   }
 
   .sr-only {
@@ -339,13 +344,15 @@
       .map((size, index) => ({ size, index }))
       .reverse()
       .forEach(({ size, index }) => {
+        const shadow = document.createElement('i');
+        shadow.className = 'layer-shadow';
         const image = new Image();
         image.src = `img/${data.id}-${index + 1}.webp`;
         image.alt = '';
         image.draggable = false;
         image.className = 'layer';
-        element.append(image);
-        cake.layers[index] = { image, size, closedY: 0, openY: 0, height: 0 };
+        element.append(shadow, image);
+        cake.layers[index] = { image, shadow, size, closedY: 0, openY: 0, height: 0 };
       });
 
     cakeHolder.append(element);
@@ -360,6 +367,8 @@
       layer.height = (layer.size.height / SOURCE_WIDTH) * cakeWidth;
       layer.image.style.width = `${cakeWidth}px`;
       layer.image.style.height = `${layer.height}px`;
+      layer.shadow.style.width = `${cakeWidth * 0.96}px`;
+      layer.shadow.style.height = `${cakeWidth * 0.13}px`;
     });
 
     const stackHeight =
@@ -445,6 +454,7 @@
     cake.layers.forEach((layer) => {
       const center = layer.closedY + (layer.openY - layer.closedY) * open;
       layer.image.style.transform = `translate(${left.toFixed(1)}px, ${(center - layer.height / 2).toFixed(1)}px)`;
+      layer.shadow.style.transform = `translate(${(left + view.cakeWidth * 0.02).toFixed(1)}px, ${(center + layer.height / 2 - view.cakeWidth * 0.08).toFixed(1)}px)`;
     });
 
     cake.decor.forEach((piece) => {
@@ -557,6 +567,11 @@
       if (event.key === 'ArrowLeft') go(-1);
     });
     window.addEventListener('resize', fit);
+
+    // Decode the other cakes ahead of time, so the first slide to each one stays smooth.
+    cakes.slice(1).forEach((cake) => {
+      cake.element.querySelectorAll('img').forEach((image) => image.decode().catch(() => {}));
+    });
 
     // Give the first cake a moment to arrive, but never let a slow image block the page.
     const images = [...first.element.querySelectorAll('img')];
